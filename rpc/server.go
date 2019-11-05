@@ -2,6 +2,8 @@ package rpc
 
 import (
 	"fmt"
+
+	"github.com/gogo/protobuf/proto"
 	"github.com/streadway/amqp"
 )
 
@@ -98,7 +100,7 @@ func (srv *serverImpl) Serve(handler CallHandler) {
 
 func (srv *serverImpl) callHandler(handler CallHandler, msg amqp.Delivery) {
 	var req Request
-	err := req.Unmarshal(msg.Body)
+	err := proto.Unmarshal(msg.Body, &req)
 	if err != nil {
 		panic(fmt.Sprintf("Failed unmarshal request: %v", err))
 	}
@@ -113,7 +115,7 @@ func (srv *serverImpl) callHandler(handler CallHandler, msg amqp.Delivery) {
 		resp.Body = data
 	}
 
-	respData, err := resp.Marshal()
+	respData, err := proto.Marshal(&resp)
 	if err != nil {
 		panic(fmt.Sprintf("Failed marshall responce: %v", err))
 	}
@@ -133,5 +135,5 @@ func (srv *serverImpl) callHandler(handler CallHandler, msg amqp.Delivery) {
 		panic(fmt.Sprintf("Failed to publish a message: %v", err))
 	}
 
-	msg.Ack(false)
+	_ = msg.Ack(false)
 }

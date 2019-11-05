@@ -2,8 +2,9 @@ syntax = "proto3";
 package rpc;
 
 message Request {
-  int32 FuncID = 1;
-  bytes Body = 2;
+  int64 UUID = 1;
+  int32 FuncID = 2;
+  bytes Body = 3;
 }
 
 message Response {

@@ -3,10 +3,11 @@ package rpc
 import (
 	"errors"
 	"fmt"
-	"github.com/satori/go.uuid"
-	"github.com/streadway/amqp"
 	"sync"
 	"time"
+
+	"github.com/gogo/protobuf/proto"
+	"github.com/streadway/amqp"
 )
 
 var ErrTimeout = errors.New("timeout")
@@ -110,13 +111,13 @@ func (client *clientImpl) Close() {
 }
 
 func (client *clientImpl) RemoteCall(p Request) ([]byte, error) {
-	request, err := p.Marshal()
+	request, err := proto.Marshal(&p)
 	if err != nil {
 		return nil, err
 	}
 
 	expiration := fmt.Sprintf("%d", client.timeout)
-	corrId := newCorrId()
+	corrId := fmt.Sprintf("%d", p.UUID)
 	err = client.channel.Publish(
 		"",                 // exchange
 		client.serverQueue, // routing key
@@ -145,7 +146,8 @@ func (client *clientImpl) RemoteCall(p Request) ([]byte, error) {
 	select {
 	case <-call.done:
 		var resp Response
-		respError = resp.Unmarshal(call.data)
+		//respError = resp.Unmarshal(call.data)
+		respError = proto.Unmarshal(call.data, &resp)
 		if respError == nil {
 			if resp.IsSuccess {
 				respData = resp.Body
@@ -166,8 +168,8 @@ func (client *clientImpl) RemoteCall(p Request) ([]byte, error) {
 }
 
 func (client *clientImpl) handleDeliveries(msgs <-chan amqp.Delivery) {
-	finish := false
-	for !finish {
+	//finish := false
+	for {
 		select {
 		case msg := <-msgs:
 			call, ok := client.calls[msg.CorrelationId]
@@ -176,11 +178,8 @@ func (client *clientImpl) handleDeliveries(msgs <-chan amqp.Delivery) {
 				call.done <- true
 			}
 		case <-client.done:
-			finish = true
+			//finish = true
+			return
 		}
 	}
-}
-
-func newCorrId() string {
-	return uuid.NewV4().String()
 }
