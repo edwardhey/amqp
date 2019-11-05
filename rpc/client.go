@@ -14,13 +14,13 @@ var ErrTimeout = errors.New("timeout")
 
 type Client interface {
 	Close()
-	RemoteCall(p Request) ([]byte, error)
+	RemoteCall(p Request, timeout time.Duration) ([]byte, error)
 }
 
 type ClientConfig struct {
 	Url         string
 	ServerQueue string
-	Timeout     time.Duration
+	//Timeout     time.Duration
 }
 
 func Connect(cfg ClientConfig) (Client, error) {
@@ -59,7 +59,8 @@ func Connect(cfg ClientConfig) (Client, error) {
 		return nil, err
 	}
 
-	client := newClient(cfg.ServerQueue, conn, channel, &queue, cfg.Timeout)
+	//client := newClient(cfg.ServerQueue, conn, channel, &queue, cfg.Timeout)
+	client := newClient(cfg.ServerQueue, conn, channel, &queue)
 	go client.handleDeliveries(msgs)
 
 	return client, nil
@@ -74,8 +75,8 @@ type clientImpl struct {
 	serverQueue string
 	guard       sync.Mutex
 	calls       map[string]*pendingCall
-	timeout     time.Duration
-	done        chan bool
+	//timeout     time.Duration
+	done chan bool
 }
 
 type pendingCall struct {
@@ -83,15 +84,15 @@ type pendingCall struct {
 	data []byte
 }
 
-func newClient(serverQueue string, conn *amqp.Connection, channel *amqp.Channel, queue *amqp.Queue, timeout time.Duration) *clientImpl {
+func newClient(serverQueue string, conn *amqp.Connection, channel *amqp.Channel, queue *amqp.Queue) *clientImpl {
 	return &clientImpl{
 		serverQueue: serverQueue,
 		conn:        conn,
 		channel:     channel,
 		queue:       queue,
 		calls:       make(map[string]*pendingCall),
-		timeout:     timeout,
-		done:        make(chan bool)}
+		//timeout:     timeout,
+		done: make(chan bool)}
 }
 
 func (client *clientImpl) Close() {
@@ -110,13 +111,13 @@ func (client *clientImpl) Close() {
 	}
 }
 
-func (client *clientImpl) RemoteCall(p Request) ([]byte, error) {
+func (client *clientImpl) RemoteCall(p Request, timeout time.Duration) ([]byte, error) {
 	request, err := proto.Marshal(&p)
 	if err != nil {
 		return nil, err
 	}
 
-	expiration := fmt.Sprintf("%d", client.timeout)
+	expiration := fmt.Sprintf("%d", timeout)
 	corrId := fmt.Sprintf("%d", p.UUID)
 	err = client.channel.Publish(
 		"",                 // exchange
@@ -156,7 +157,7 @@ func (client *clientImpl) RemoteCall(p Request) ([]byte, error) {
 			}
 		}
 
-	case <-time.After(client.timeout):
+	case <-time.After(timeout):
 		break
 	}
 
